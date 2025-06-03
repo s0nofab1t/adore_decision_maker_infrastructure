@@ -20,6 +20,7 @@
 #include "adore_dynamics_conversions.hpp"
 #include "adore_map/map.hpp"
 #include "adore_map/map_loader.hpp"
+#include "adore_map/route.hpp"
 #include "adore_map/traffic_light.hpp"
 #include "adore_map_conversions.hpp"
 #include "adore_math/angles.h"
@@ -50,8 +51,7 @@ private:
   rclcpp::Publisher<adore_ros2_msgs::msg::VisualizableObject>::SharedPtr    publisher_infrastructure_position;
 
   /******************************* SUBSCRIBERS RELATED MEMBERS ************************************************************/
-  using StateSubscriber = rclcpp::Subscription<adore_ros2_msgs::msg::TrafficParticipant>::SharedPtr;
-  std::unordered_map<std::string, StateSubscriber> traffic_participant_subscribers;
+  rclcpp::Subscription<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr subscriber_traffic_participant_set;
 
   /******************************* OTHER MEMBERS *************************************************************************/
   std::optional<adore::map::Map>         road_map = std::nullopt;
@@ -60,13 +60,16 @@ private:
 public:
 
   bool                                  debug_mode_active = true;
-  double                                dt                = 0.05;
-  double                                local_map_size    = 500;
+  double                                dt                = 0.1;
+  double                                local_map_size    = 200;
   adore::math::Pose2d                   infrastructure_pose;
   adore::dynamics::VehicleCommandLimits command_limits = { 0.7, -2.0, 2.0 };
   std::map<std::string, double>         multi_agent_PID_settings;
   adore::planner::MultiAgentPID         multi_agent_PID_planner;
-  std::string                           map_file_location;
+  // adore::planner::MultiAgentPID         multi_agent_PID_planner_MRM;
+
+
+  std::string map_file_location;
 
   void run();
   void update_state();
@@ -78,18 +81,15 @@ public:
   void compute_routes_for_traffic_participant_set( adore::dynamics::TrafficParticipantSet& traffic_participant_set,
                                                    const adore::map::Map&                  road_map );
   void all_vehicles_follow_routes();
-  void update_dynamic_subscriptions();
 
   /******************************* PUBLISHER RELATED FUNCTIONS ************************************************************/
   void publish_local_map();
   void publish_infrastructure_position();
 
   /******************************* SUBSCRIBER RELATED FUNCTIONS************************************************************/
+  void traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg );
 
-  void traffic_participant_callback( const adore_ros2_msgs::msg::TrafficParticipant& msg );
-
-
-  DecisionMakerInfrastructure();
+  explicit DecisionMakerInfrastructure(const rclcpp::NodeOptions & options);
 };
 
 } // namespace adore
