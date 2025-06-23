@@ -20,7 +20,8 @@
 namespace adore
 {
 
-DecisionMakerInfrastructure::DecisionMakerInfrastructure(const rclcpp::NodeOptions & options) : Node( "decision_maker_infrastructure" , options)
+DecisionMakerInfrastructure::DecisionMakerInfrastructure( const rclcpp::NodeOptions& options ) :
+  Node( "decision_maker_infrastructure", options )
 {
   load_parameters();
   // Load map
@@ -88,13 +89,6 @@ DecisionMakerInfrastructure::load_parameters()
 
   declare_parameter( "dt", 0.1 );
   get_parameter( "dt", dt );
-
-  declare_parameter( "max_acceleration", 2.0 );
-  declare_parameter( "min_acceleration", -2.0 );
-  declare_parameter( "max_steering", 0.7 );
-  get_parameter( "max_acceleration", command_limits.max_acceleration );
-  get_parameter( "min_acceleration", command_limits.min_acceleration );
-  get_parameter( "max_steering", command_limits.max_steering_angle );
 
   declare_parameter( "map file", "" );
   get_parameter( "map file", map_file_location );
@@ -229,6 +223,5 @@ DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msg
 
 }; // namespace adore
 
-
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(adore::DecisionMakerInfrastructure)
+RCLCPP_COMPONENTS_REGISTER_NODE( adore::DecisionMakerInfrastructure )
