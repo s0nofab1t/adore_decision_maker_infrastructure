@@ -49,6 +49,7 @@ private:
   rclcpp::Publisher<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr publisher_planned_traffic;
   rclcpp::Publisher<adore_ros2_msgs::msg::Map>::SharedPtr                   publisher_local_map;
   rclcpp::Publisher<adore_ros2_msgs::msg::VisualizableObject>::SharedPtr    publisher_infrastructure_position;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr    publisher_overview;
 
   /******************************* SUBSCRIBERS RELATED MEMBERS ************************************************************/
   rclcpp::Subscription<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr subscriber_traffic_participant_set;
@@ -56,6 +57,7 @@ private:
   /******************************* OTHER MEMBERS *************************************************************************/
   std::optional<adore::map::Map>         road_map = std::nullopt;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
+  std::string overview;
 
 public:
 
@@ -77,7 +79,7 @@ public:
   void create_publishers();
   void load_parameters();
   void print_init_info();
-  void print_debug_info();
+  void debug_info(bool print);
   void compute_routes_for_traffic_participant_set( adore::dynamics::TrafficParticipantSet& traffic_participant_set,
                                                    const adore::map::Map&                  road_map );
   void all_vehicles_follow_routes();

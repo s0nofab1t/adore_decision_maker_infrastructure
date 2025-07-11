@@ -16,6 +16,7 @@
 
 #include <adore_dynamics_conversions.hpp>
 #include <adore_math/point.h>
+#include "std_msgs/msg/string.hpp"
 
 namespace adore
 {
@@ -33,7 +34,10 @@ DecisionMakerInfrastructure::DecisionMakerInfrastructure(const rclcpp::NodeOptio
 void
 DecisionMakerInfrastructure::run()
 {
+  overview = "";
+
   auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
+  debug_info(debug_mode_active);
 
   if( road_map.has_value() )
   {
@@ -48,10 +52,14 @@ DecisionMakerInfrastructure::run()
   // Log the elapsed time
   RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
 
-  if( debug_mode_active )
-    print_debug_info();
   publish_local_map();
   publish_infrastructure_position();
+
+  latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
+
+  std_msgs::msg::String overview_msg;
+  overview_msg.data = overview;
+  publisher_overview->publish(overview_msg);
 }
 
 void
@@ -78,6 +86,7 @@ DecisionMakerInfrastructure::create_publishers()
   publisher_planned_traffic = create_publisher<adore_ros2_msgs::msg::TrafficParticipantSet>( "traffic_participants_with_trajectories", 1 );
   publisher_local_map       = create_publisher<adore_ros2_msgs::msg::Map>( "local_map", 1 );
   publisher_infrastructure_position = create_publisher<adore_ros2_msgs::msg::VisualizableObject>( "infrastructure_position", 1 );
+  publisher_overview = create_publisher<std_msgs::msg::String>( "overview", 1 );
 }
 
 void
@@ -158,8 +167,15 @@ DecisionMakerInfrastructure::print_init_info()
 }
 
 void
-DecisionMakerInfrastructure::print_debug_info()
+DecisionMakerInfrastructure::debug_info(bool print)
 {
+  if ( !road_map.has_value() )
+  {
+    overview += "Missing map, ";
+  }
+
+  if ( !print ) return;
+
   double current_time_seconds = now().seconds();
   std::cerr << "------- Decision Maker Infrastructure Debug Information -------" << std::endl;
   std::cerr << "Current Time: " << current_time_seconds << " seconds" << std::endl;
@@ -178,6 +194,8 @@ void
 DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamics::TrafficParticipantSet& traffic_participant_set,
                                                                          const map::Map&                  road_map )
 {
+  int controlable_participants = 0;
+  
   for( auto& [id, participant] : traffic_participant_set.participants )
   {
     bool no_goal  = !participant.goal_point.has_value();
@@ -188,14 +206,17 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
 
     if( !no_goal && no_route )
     {
+      controlable_participants++;
       participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
       if( participant.route->center_lane.empty() )
       {
         participant.route = std::nullopt;
-        std::cerr << "No route found for traffic participant" << std::endl;
+        std::cerr << "No route found for traffic participant " << participant.id << std::endl;
       }
     }
   }
+
+  overview += "trajectory planning for " + std::to_string(controlable_participants) + " participants, ";
 }
 
 void
@@ -224,7 +245,14 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
 void
 DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg )
 {
-  latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );
+  std::cerr << "participant received - decision maker infra " << std::endl;
+  auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
+  for ( auto& [id, participant] : participants_cpp.participants )
+    latest_traffic_participant_set.update_traffic_participants(participant);
+
+  // auto validity_area = latest_traffic_participant_set.validity_area;
+  // latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );
+  // latest_traffic_participant_set.validity_area = validity_area;
 }
 
 }; // namespace adore
