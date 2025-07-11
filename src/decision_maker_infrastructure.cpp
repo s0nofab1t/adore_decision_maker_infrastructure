@@ -16,6 +16,7 @@
 
 #include <adore_dynamics_conversions.hpp>
 #include <adore_math/point.h>
+#include <adore_math/polygon.h>
 #include "std_msgs/msg/string.hpp"
 
 namespace adore
@@ -55,7 +56,7 @@ DecisionMakerInfrastructure::run()
   publish_local_map();
   publish_infrastructure_position();
 
-  latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
+  // latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
 
   std_msgs::msg::String overview_msg;
   overview_msg.data = overview;
@@ -195,6 +196,7 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
                                                                          const map::Map&                  road_map )
 {
   int controlable_participants = 0;
+  int controlable_participants_inside_validity_area = 0;
   
   for( auto& [id, participant] : traffic_participant_set.participants )
   {
@@ -206,7 +208,24 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
 
     if( !no_goal && no_route )
     {
+      // This is all used for overview purposes, move it somewhere else
       controlable_participants++;
+
+
+      if (traffic_participant_set.validity_area.has_value()) // @TODO, this filter needs to be done elsewhere.
+      {
+        math::Point2d participant_position = { participant.state.x, participant.state.y };
+        if (traffic_participant_set.validity_area.value().point_inside(participant_position))
+        {
+          controlable_participants_inside_validity_area++;
+        }
+      }
+      else
+      {
+        controlable_participants_inside_validity_area++;
+      }
+      // ------------------------------------------
+      
       participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
       if( participant.route->center_lane.empty() )
       {
@@ -216,7 +235,9 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
     }
   }
 
+  overview += "observing " + std::to_string(traffic_participant_set.participants.size()) + " participants, ";
   overview += "trajectory planning for " + std::to_string(controlable_participants) + " participants, ";
+  overview += "with " + std::to_string(controlable_participants_inside_validity_area) + " inside the validty area, ";
 }
 
 void
@@ -245,14 +266,16 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
 void
 DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg )
 {
-  std::cerr << "participant received - decision maker infra " << std::endl;
-  auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
-  for ( auto& [id, participant] : participants_cpp.participants )
-    latest_traffic_participant_set.update_traffic_participants(participant);
+  auto validity_area = latest_traffic_participant_set.validity_area;
+  latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );// @TODO, this is temporary, add back the uncommented area below
+  latest_traffic_participant_set.validity_area = validity_area;
 
-  // auto validity_area = latest_traffic_participant_set.validity_area;
-  // latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );
-  // latest_traffic_participant_set.validity_area = validity_area;
+  // std::cerr << "participant received - decision maker infra " << std::endl;
+  // auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
+  // for ( auto& [id, participant] : participants_cpp.participants )
+  // {
+  //   latest_traffic_participant_set.update_traffic_participants(participant); // @TODO, investigate this more, as it does not add them unless their are inside validity area
+  // }
 }
 
 }; // namespace adore
