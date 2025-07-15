@@ -25,7 +25,7 @@ DecisionMakerInfrastructure::DecisionMakerInfrastructure( const rclcpp::NodeOpti
 {
   load_parameters();
   // Load map
-  road_map = map::MapLoader::load_from_file( map_file_location );
+  road_map = std::make_shared<map::Map>( map::MapLoader::load_from_file( map_file_location ) );
   create_subscribers();
   create_publishers();
   print_init_info();
@@ -36,9 +36,9 @@ DecisionMakerInfrastructure::run()
 {
   auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
 
-  if( road_map.has_value() )
+  if( road_map )
   {
-    compute_routes_for_traffic_participant_set( latest_traffic_participant_set, road_map.value() );
+    // compute_routes_for_traffic_participant_set();
   }
   all_vehicles_follow_routes();
   auto end_time = std::chrono::high_resolution_clock::now(); // End timer
@@ -58,10 +58,9 @@ DecisionMakerInfrastructure::run()
 void
 DecisionMakerInfrastructure::all_vehicles_follow_routes()
 {
-  // auto mrm_participant_set = latest_traffic_participant_set;
-  multi_agent_PID_planner.plan_trajectories( latest_traffic_participant_set );
-  // multi_agent_PID_planner_MRM.plan_trajectories( mrm_participant_set );
-  // TODO add the MRM trajectories to the traffic participants
+
+  planner::MultiAgentPlanner planner;
+  latest_traffic_participant_set = planner.plan_all_participants( latest_traffic_participant_set, road_map );
   publisher_planned_traffic->publish( dynamics::conversions::to_ros_msg( latest_traffic_participant_set ) );
 }
 
@@ -158,7 +157,7 @@ DecisionMakerInfrastructure::print_debug_info()
   std::cerr << "------- Decision Maker Infrastructure Debug Information -------" << std::endl;
   std::cerr << "Current Time: " << current_time_seconds << " seconds" << std::endl;
 
-  if( road_map.has_value() )
+  if( road_map )
     std::cerr << "Local map data available.\n";
   else
     std::cerr << "No local map data.\n";
@@ -169,16 +168,15 @@ DecisionMakerInfrastructure::print_debug_info()
 }
 
 void
-DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamics::TrafficParticipantSet& traffic_participant_set,
-                                                                         const map::Map&                  road_map )
+DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set()
 {
-  for( auto& [id, participant] : traffic_participant_set.participants )
+  for( auto& [id, participant] : latest_traffic_participant_set.participants )
   {
     bool no_goal  = !participant.goal_point.has_value();
     bool no_route = !participant.route.has_value();
 
     if( !no_route )
-      participant.route->map = std::make_shared<map::Map>( road_map );
+      participant.route->map = road_map;
 
     if( !no_goal && no_route )
     {
@@ -195,7 +193,7 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
 void
 DecisionMakerInfrastructure::publish_local_map()
 {
-  if( !road_map.has_value() )
+  if( !road_map )
     return;
   auto local_map = road_map->get_submap( infrastructure_pose, local_map_size, local_map_size );
   publisher_local_map->publish( map::conversions::to_ros_msg( local_map ) );

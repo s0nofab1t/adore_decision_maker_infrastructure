@@ -32,6 +32,7 @@
 #include "adore_ros2_msgs/msg/visualizable_object.hpp"
 
 #include "planning/multi_agent_PID.hpp"
+#include "planning/multi_agent_planner.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -54,7 +55,7 @@ private:
   rclcpp::Subscription<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr subscriber_traffic_participant_set;
 
   /******************************* OTHER MEMBERS *************************************************************************/
-  std::optional<adore::map::Map>         road_map = std::nullopt;
+  std::shared_ptr<map::Map>              road_map = nullptr;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
 
 public:
@@ -77,8 +78,7 @@ public:
   void load_parameters();
   void print_init_info();
   void print_debug_info();
-  void compute_routes_for_traffic_participant_set( adore::dynamics::TrafficParticipantSet& traffic_participant_set,
-                                                   const adore::map::Map&                  road_map );
+  void compute_routes_for_traffic_participant_set();
   void all_vehicles_follow_routes();
 
   /******************************* PUBLISHER RELATED FUNCTIONS ************************************************************/
