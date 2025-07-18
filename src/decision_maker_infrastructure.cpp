@@ -266,16 +266,16 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
 void
 DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg )
 {
-  auto validity_area = latest_traffic_participant_set.validity_area;
-  latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );// @TODO, this is temporary, add back the uncommented area below
-  latest_traffic_participant_set.validity_area = validity_area;
+  // auto validity_area = latest_traffic_participant_set.validity_area;
+  // latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );// @TODO, this is temporary, add back the uncommented area below
+  // latest_traffic_participant_set.validity_area = validity_area;
 
-  // std::cerr << "participant received - decision maker infra " << std::endl;
-  // auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
-  // for ( auto& [id, participant] : participants_cpp.participants )
-  // {
-  //   latest_traffic_participant_set.update_traffic_participants(participant); // @TODO, investigate this more, as it does not add them unless their are inside validity area
-  // }
+  std::cerr << "participant received - decision maker infra " << std::endl;
+  auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
+  for ( auto& [id, participant] : participants_cpp.participants )
+  {
+    latest_traffic_participant_set.update_traffic_participants(participant); // @TODO, investigate this more, as it does not add them unless their are inside validity area
+  }
 }
 
 }; // namespace adore
