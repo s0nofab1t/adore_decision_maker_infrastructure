@@ -56,6 +56,7 @@ private:
 
   /******************************* OTHER MEMBERS *************************************************************************/
   std::optional<adore::map::Map>         road_map = std::nullopt;
+  std::optional<adore::map::Map>         local_map = std::nullopt;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
   std::string overview;
 

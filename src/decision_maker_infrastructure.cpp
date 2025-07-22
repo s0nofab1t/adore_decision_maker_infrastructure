@@ -40,9 +40,9 @@ DecisionMakerInfrastructure::run()
   auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
   debug_info(debug_mode_active);
 
-  if( road_map.has_value() )
+  if( local_map.has_value() )
   {
-    compute_routes_for_traffic_participant_set( latest_traffic_participant_set, road_map.value() );
+    compute_routes_for_traffic_participant_set( latest_traffic_participant_set, local_map.value() );
   }
   all_vehicles_follow_routes();
   auto end_time = std::chrono::high_resolution_clock::now(); // End timer
@@ -56,7 +56,7 @@ DecisionMakerInfrastructure::run()
   publish_local_map();
   publish_infrastructure_position();
 
-  // latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
+  latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
 
   std_msgs::msg::String overview_msg;
   overview_msg.data = overview;
@@ -200,13 +200,23 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
   
   for( auto& [id, participant] : traffic_participant_set.participants )
   {
-    bool no_goal  = !participant.goal_point.has_value();
-    bool no_route = !participant.route.has_value();
+    bool has_goal  = participant.goal_point.has_value();
+    bool has_route = participant.route.has_value();
 
-    if( !no_route )
+    if( has_route )
       participant.route->map = std::make_shared<map::Map>( road_map );
 
-    if( !no_goal && no_route )
+    if( has_goal && !has_route )
+    {
+      participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
+      if( participant.route->center_lane.empty() )
+      {
+        participant.route = std::nullopt;
+        std::cerr << "No route found for traffic participant " << participant.id << std::endl;
+      }
+    }
+
+    if( has_goal )
     {
       // This is all used for overview purposes, move it somewhere else
       controlable_participants++;
@@ -226,12 +236,6 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
       }
       // ------------------------------------------
       
-      participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
-      if( participant.route->center_lane.empty() )
-      {
-        participant.route = std::nullopt;
-        std::cerr << "No route found for traffic participant " << participant.id << std::endl;
-      }
     }
   }
 
@@ -245,8 +249,8 @@ DecisionMakerInfrastructure::publish_local_map()
 {
   if( !road_map.has_value() )
     return;
-  auto local_map = road_map->get_submap( infrastructure_pose, local_map_size, local_map_size );
-  publisher_local_map->publish( map::conversions::to_ros_msg( local_map ) );
+  local_map = road_map->get_submap( infrastructure_pose, local_map_size, local_map_size );
+  publisher_local_map->publish( map::conversions::to_ros_msg( local_map.value() ) );
 }
 
 void
@@ -274,6 +278,7 @@ DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msg
   auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
   for ( auto& [id, participant] : participants_cpp.participants )
   {
+    std::cerr << "Participant delay: " << now().seconds() - participant.state.time << std::endl;
     latest_traffic_participant_set.update_traffic_participants(participant); // @TODO, investigate this more, as it does not add them unless their are inside validity area
   }
 }
