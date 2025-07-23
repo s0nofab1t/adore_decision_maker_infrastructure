@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: EPL-2.0
  *
  * Contributors:
- *    Giovanni Lucente
+ *    Marko Mizdrak
  ********************************************************************************/
 
 #include "decision_maker_infrastructure.hpp"
@@ -24,8 +24,6 @@ DecisionMakerInfrastructure::DecisionMakerInfrastructure( const rclcpp::NodeOpti
   Node( "decision_maker_infrastructure", options )
 {
   load_parameters();
-  // Load map
-  road_map = std::make_shared<map::Map>( map::MapLoader::load_from_file( map_file_location ) );
   create_subscribers();
   create_publishers();
   print_init_info();
@@ -35,168 +33,102 @@ void
 DecisionMakerInfrastructure::run()
 {
   auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
-
-  if( road_map )
-  {
-    // compute_routes_for_traffic_participant_set();
-  }
-  all_vehicles_follow_routes();
-  auto end_time = std::chrono::high_resolution_clock::now(); // End timer
-
-  // Compute elapsed time in milliseconds
+  plan_traffic();
+  auto   end_time        = std::chrono::high_resolution_clock::now(); // End timer
   double elapsed_time_ms = std::chrono::duration<double, std::milli>( end_time - start_time ).count();
 
-  // Log the elapsed time
   RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
 
-  if( debug_mode_active )
-    print_debug_info();
-  publish_local_map();
+  print_debug_info();
   publish_infrastructure_position();
 }
 
 void
-DecisionMakerInfrastructure::all_vehicles_follow_routes()
+DecisionMakerInfrastructure::plan_traffic()
 {
+  if( !road_map )
+    return;
 
   planner::MultiAgentPlanner planner;
   latest_traffic_participant_set = planner.plan_all_participants( latest_traffic_participant_set, road_map );
-  publisher_planned_traffic->publish( dynamics::conversions::to_ros_msg( latest_traffic_participant_set ) );
+  auto participants_no_routes    = latest_traffic_participant_set;
+  for( auto& [id, participant] : participants_no_routes.participants )
+  {
+    participant.route.reset();
+  }
+  publisher_planned_traffic->publish( dynamics::conversions::to_ros_msg( participants_no_routes ) );
 }
 
 void
 DecisionMakerInfrastructure::create_subscribers()
 {
-  subscriber_traffic_participant_set = create_subscription<adore_ros2_msgs::msg::TrafficParticipantSet>(
-    "traffic_participants", 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
+  update_dynamic_subscriptions();
   main_timer = create_wall_timer( 100ms, std::bind( &DecisionMakerInfrastructure::run, this ) );
 }
 
 void
 DecisionMakerInfrastructure::create_publishers()
 {
-  publisher_planned_traffic = create_publisher<adore_ros2_msgs::msg::TrafficParticipantSet>( "traffic_participants_with_trajectories", 1 );
-  publisher_local_map       = create_publisher<adore_ros2_msgs::msg::Map>( "local_map", 1 );
+  publisher_planned_traffic         = create_publisher<ParticipantSetAdapter>( "/planned_traffic", 1 );
   publisher_infrastructure_position = create_publisher<adore_ros2_msgs::msg::VisualizableObject>( "infrastructure_position", 1 );
+  publisher_infrastructure_info     = create_publisher<adore_ros2_msgs::msg::InfrastructureInfo>( "infrastructure_info", 1 );
 }
 
 void
 DecisionMakerInfrastructure::load_parameters()
 {
-  declare_parameter( "debug_mode_active", true );
-  get_parameter( "debug_mode_active", debug_mode_active );
+  // Debug and simulation parameters
+  dt = declare_parameter<double>( "dt", 0.1 );
 
-  declare_parameter( "dt", 0.1 );
-  get_parameter( "dt", dt );
+  std::string map_file_location = declare_parameter<std::string>( "map file", "" );
+  road_map                      = std::make_shared<map::Map>( map::MapLoader::load_from_file( map_file_location ) );
 
-  declare_parameter( "map file", "" );
-  get_parameter( "map file", map_file_location );
+  infrastructure_pose.x   = declare_parameter<double>( "infrastructure_position_x", 0.0 );
+  infrastructure_pose.y   = declare_parameter<double>( "infrastructure_position_y", 0.0 );
+  infrastructure_pose.yaw = declare_parameter<double>( "infrastructure_yaw", 0.0 );
 
-  declare_parameter( "infrastructure_position_x", 0.0 );
-  declare_parameter( "infrastructure_position_y", 0.0 );
-  declare_parameter( "infrastructure_yaw", 0.0 );
-  get_parameter( "infrastructure_position_x", infrastructure_pose.x );
-  get_parameter( "infrastructure_position_y", infrastructure_pose.y );
-  get_parameter( "infrastructure_yaw", infrastructure_pose.yaw );
+  // Validity area polygon
+  std::vector<double> validity_area_points;
+  validity_area_points = declare_parameter<std::vector<double>>( "validity_polygon", validity_area_points );
 
-  // Multi Agent PID related parameters
-  std::vector<std::string> keys;
-  std::vector<double>      values;
-  declare_parameter( "multi_agent_PID_settings_keys", keys );
-  declare_parameter( "multi_agent_PID_settings_values", values );
-  get_parameter( "multi_agent_PID_settings_keys", keys );
-  get_parameter( "multi_agent_PID_settings_values", values );
-
-  if( keys.size() != values.size() )
-  {
-    RCLCPP_ERROR( this->get_logger(), "multi agent PID settings keys and values size mismatch!" );
-    return;
-  }
-  for( size_t i = 0; i < keys.size(); ++i )
-  {
-    multi_agent_PID_settings.insert( { keys[i], values[i] } );
-    std::cerr << "keys: " << keys[i] << ": " << values[i] << std::endl;
-  }
-
-
-  std::vector<double> validity_area_points; // request assistance polygon
-  declare_parameter( "validity_polygon", std::vector<double>{} );
-  get_parameter( "validity_polygon", validity_area_points );
-
-  // Convert the parameter into a Polygon2d
-  if( validity_area_points.size() >= 6 ) // minimum 3 x, 3 y
+  // Convert parameter into Polygon2d if valid
+  if( validity_area_points.size() >= 6 ) // minimum 3 points (x,y)
   {
     math::Polygon2d validity_area;
     validity_area.points.reserve( validity_area_points.size() / 2 );
 
     for( size_t i = 0; i < validity_area_points.size(); i += 2 )
     {
-      double x = validity_area_points[i];
-      double y = validity_area_points[i + 1];
+      const double x = validity_area_points[i];
+      const double y = validity_area_points[i + 1];
       validity_area.points.push_back( { x, y } );
     }
+
     latest_traffic_participant_set.validity_area = validity_area;
   }
-
-  multi_agent_PID_planner.set_parameters( multi_agent_PID_settings );
-  // multi_agent_PID_planner_MRM           = multi_agent_PID_planner;
-  // mutli_agent_PID_planner_MRM.max_speed = 0.0;
 }
 
 void
 DecisionMakerInfrastructure::print_init_info()
 {
-  std::cout << "DecisionMakerInfrastructure node initialized.\n";
-  std::cout << "Debug mode: " << ( debug_mode_active ? "Active" : "Inactive" ) << std::endl;
+  RCLCPP_INFO( get_logger(), "DecisionMakerInfrastructure node initialized." );
 }
 
 void
 DecisionMakerInfrastructure::print_debug_info()
 {
-  double current_time_seconds = now().seconds();
-  std::cerr << "------- Decision Maker Infrastructure Debug Information -------" << std::endl;
-  std::cerr << "Current Time: " << current_time_seconds << " seconds" << std::endl;
+  const double current_time_seconds = now().seconds();
+
+  RCLCPP_DEBUG( get_logger(), "------- Decision Maker Infrastructure Debug Information -------" );
+  RCLCPP_DEBUG( get_logger(), "Current Time: %.3f seconds", current_time_seconds );
 
   if( road_map )
-    std::cerr << "Local map data available.\n";
+    RCLCPP_DEBUG( get_logger(), "Local map data available." );
   else
-    std::cerr << "No local map data.\n";
+    RCLCPP_DEBUG( get_logger(), "No local map data." );
 
-  std::cerr << "traffic participants " << latest_traffic_participant_set.participants.size() << std::endl;
-
-  std::cerr << "------- ============================== -------" << std::endl;
-}
-
-void
-DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set()
-{
-  for( auto& [id, participant] : latest_traffic_participant_set.participants )
-  {
-    bool no_goal  = !participant.goal_point.has_value();
-    bool no_route = !participant.route.has_value();
-
-    if( !no_route )
-      participant.route->map = road_map;
-
-    if( !no_goal && no_route )
-    {
-      participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
-      if( participant.route->center_lane.empty() )
-      {
-        participant.route = std::nullopt;
-        std::cerr << "No route found for traffic participant" << std::endl;
-      }
-    }
-  }
-}
-
-void
-DecisionMakerInfrastructure::publish_local_map()
-{
-  if( !road_map )
-    return;
-  auto local_map = road_map->get_submap( infrastructure_pose, local_map_size, local_map_size );
-  publisher_local_map->publish( map::conversions::to_ros_msg( local_map ) );
+  RCLCPP_DEBUG( get_logger(), "Traffic participants: %zu", latest_traffic_participant_set.participants.size() );
+  RCLCPP_DEBUG( get_logger(), "------- ============================== -------" );
 }
 
 void
@@ -211,12 +143,76 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
   obj.header.frame_id = "world";
 
   publisher_infrastructure_position->publish( obj );
+
+  adore_ros2_msgs::msg::InfrastructureInfo infrastructure_info_msg;
+  infrastructure_info_msg.position_x = infrastructure_pose.x;
+  infrastructure_info_msg.position_y = infrastructure_pose.y;
+  infrastructure_info_msg.yaw        = infrastructure_pose.yaw;
+
+  adore_ros2_msgs::msg::Polygon2d validity_area_msg;
+  if( latest_traffic_participant_set.validity_area.has_value() )
+  {
+    for( const auto& point : latest_traffic_participant_set.validity_area->points )
+    {
+      adore_ros2_msgs::msg::Point2d p;
+      p.x = point.x;
+      p.y = point.y;
+      validity_area_msg.points.push_back( p );
+    }
+
+    infrastructure_info_msg.validity_area = validity_area_msg;
+  }
+  publisher_infrastructure_info->publish( infrastructure_info_msg );
 }
 
 void
-DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg )
+DecisionMakerInfrastructure::traffic_participant_callback( const dynamics::TrafficParticipant& msg, const std::string& vehicle_namespace )
 {
-  latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );
+  latest_traffic_participant_set.update_traffic_participants( msg );
+}
+
+void
+DecisionMakerInfrastructure::update_dynamic_subscriptions()
+{
+  auto       topic_names_and_types = get_topic_names_and_types();
+  std::regex valid_topic_regex( R"(^/([^/]+)/traffic_participant$)" );
+  std::regex valid_type_regex( R"(^adore_ros2_msgs/msg/TrafficParticipant$)" );
+
+  for( const auto& topic : topic_names_and_types )
+  {
+    const std::string&              topic_name = topic.first;
+    const std::vector<std::string>& types      = topic.second;
+
+    std::smatch match;
+    if( std::regex_match( topic_name, match, valid_topic_regex )
+        && std::any_of( types.begin(), types.end(),
+                        [&]( const std::string& type ) { return std::regex_match( type, valid_type_regex ); } ) )
+    {
+      std::string vehicle_namespace = match[1].str();
+
+      // Skip subscribing to own namespace
+      if( vehicle_namespace == std::string( get_namespace() ).substr( 1 ) )
+      {
+        continue;
+      }
+
+      // Check if already subscribed
+      if( traffic_participant_subscribers.count( vehicle_namespace ) > 0 )
+      {
+        continue;
+      }
+
+      // Create a new subscription
+      auto subscription = create_subscription<ParticipantAdapter>( topic_name, 10,
+                                                                   [this, vehicle_namespace]( const dynamics::TrafficParticipant& msg ) {
+        traffic_participant_callback( msg, vehicle_namespace );
+      } );
+
+      traffic_participant_subscribers[vehicle_namespace] = subscription;
+
+      RCLCPP_INFO( get_logger(), "Subscribed to new vehicle namespace: %s", vehicle_namespace.c_str() );
+    }
+  }
 }
 
 }; // namespace adore
