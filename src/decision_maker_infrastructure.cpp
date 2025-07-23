@@ -40,9 +40,9 @@ DecisionMakerInfrastructure::run()
   auto start_time = std::chrono::high_resolution_clock::now(); // Start timer
   debug_info(debug_mode_active);
 
-  if( local_map.has_value() )
+  if( road_map.has_value() )
   {
-    compute_routes_for_traffic_participant_set( latest_traffic_participant_set, local_map.value() );
+    compute_routes_for_traffic_participant_set( latest_traffic_participant_set, road_map.value() );
   }
   all_vehicles_follow_routes();
   auto end_time = std::chrono::high_resolution_clock::now(); // End timer
@@ -197,6 +197,8 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
 {
   int controlable_participants = 0;
   int controlable_participants_inside_validity_area = 0;
+
+  std::string text_to_add_later;
   
   for( auto& [id, participant] : traffic_participant_set.participants )
   {
@@ -213,6 +215,7 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
       {
         participant.route = std::nullopt;
         std::cerr << "No route found for traffic participant " << participant.id << std::endl;
+        text_to_add_later += "and cannot find route for participant " + std::to_string(id);
       }
     }
 
@@ -242,6 +245,7 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
   overview += "observing " + std::to_string(traffic_participant_set.participants.size()) + " participants, ";
   overview += "trajectory planning for " + std::to_string(controlable_participants) + " participants, ";
   overview += "with " + std::to_string(controlable_participants_inside_validity_area) + " inside the validty area, ";
+  overview += text_to_add_later;
 }
 
 void
