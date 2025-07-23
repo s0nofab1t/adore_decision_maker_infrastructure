@@ -282,7 +282,6 @@ DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msg
   auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
   for ( auto& [id, participant] : participants_cpp.participants )
   {
-    std::cerr << "Participant delay: " << now().seconds() - participant.state.time << std::endl;
     latest_traffic_participant_set.update_traffic_participants(participant); // @TODO, investigate this more, as it does not add them unless their are inside validity area
   }
 }
