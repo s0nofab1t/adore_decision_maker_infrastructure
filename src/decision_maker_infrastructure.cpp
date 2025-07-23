@@ -56,7 +56,7 @@ DecisionMakerInfrastructure::plan_traffic()
   {
     participant.route.reset();
   }
-  publisher_planned_traffic->publish( dynamics::conversions::to_ros_msg( participants_no_routes ) );
+  publisher_planned_traffic->publish( participants_no_routes );
 }
 
 void
