@@ -29,6 +29,7 @@
 #include "adore_ros2_msgs/msg/map.hpp"
 #include "adore_ros2_msgs/msg/route.hpp"
 #include "adore_ros2_msgs/msg/traffic_participant_set.hpp"
+#include "adore_ros2_msgs/msg/traffic_signals.hpp"
 #include "adore_ros2_msgs/msg/visualizable_object.hpp"
 
 #include "planning/multi_agent_PID.hpp"
@@ -53,6 +54,7 @@ private:
 
   /******************************* SUBSCRIBERS RELATED MEMBERS ************************************************************/
   rclcpp::Subscription<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr subscriber_traffic_participant_set;
+  rclcpp::Subscription<adore_ros2_msgs::msg::TrafficSignals>::SharedPtr        subscriber_traffic_signals;
 
   /******************************* OTHER MEMBERS *************************************************************************/
   std::optional<adore::map::Map>         road_map = std::nullopt;
@@ -71,6 +73,8 @@ public:
   adore::planner::MultiAgentPID         multi_agent_PID_planner;
   // adore::planner::MultiAgentPID         multi_agent_PID_planner_MRM;
 
+  // intermediate solution for traffic lights
+  std::vector<adore::math::Point2d> stopping_points;
 
   std::string map_file_location;
 
@@ -91,6 +95,7 @@ public:
 
   /******************************* SUBSCRIBER RELATED FUNCTIONS************************************************************/
   void traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg );
+  void traffic_signals_callback( const adore_ros2_msgs::msg::TrafficSignals& msg );
 
   explicit DecisionMakerInfrastructure(const rclcpp::NodeOptions & options);
 };
