@@ -59,6 +59,9 @@ private:
   std::shared_ptr<map::Map>              road_map = nullptr;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
 
+  std::string traffic_participant_in_topic = "traffic_participant";
+  std::string planned_traffic_out_topic    = "planned_traffic";
+
 public:
 
   double              dt             = 0.1;

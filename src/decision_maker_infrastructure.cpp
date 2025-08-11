@@ -69,7 +69,7 @@ DecisionMakerInfrastructure::create_subscribers()
 void
 DecisionMakerInfrastructure::create_publishers()
 {
-  publisher_planned_traffic         = create_publisher<ParticipantSetAdapter>( "/planned_traffic", 1 );
+  publisher_planned_traffic         = create_publisher<ParticipantSetAdapter>( planned_traffic_out_topic, 1 );
   publisher_infrastructure_position = create_publisher<adore_ros2_msgs::msg::VisualizableObject>( "infrastructure_position", 1 );
   publisher_infrastructure_info     = create_publisher<adore_ros2_msgs::msg::InfrastructureInfo>( "infrastructure_info", 1 );
 }
@@ -77,6 +77,8 @@ DecisionMakerInfrastructure::create_publishers()
 void
 DecisionMakerInfrastructure::load_parameters()
 {
+  planned_traffic_out_topic    = declare_parameter<std::string>( "planned_traffic_out_topic", "/planned_traffic" );
+  traffic_participant_in_topic = declare_parameter<std::string>( "traffic_participant_in_topic", "/traffic_participant" );
   // Debug and simulation parameters
   dt = declare_parameter<double>( "dt", 0.1 );
 
@@ -174,8 +176,14 @@ DecisionMakerInfrastructure::traffic_participant_callback( const dynamics::Traff
 void
 DecisionMakerInfrastructure::update_dynamic_subscriptions()
 {
-  auto       topic_names_and_types = get_topic_names_and_types();
-  std::regex valid_topic_regex( R"(^/([^/]+)/traffic_participant$)" );
+  auto topic_names_and_types = get_topic_names_and_types();
+
+  std::string topic_name    = traffic_participant_in_topic; // assumed to be set elsewhere
+  std::string escaped_topic = std::regex_replace( topic_name, std::regex( R"([.^$|()\\[\]{}*+?])" ), R"(\$&)" ); // escape regex
+                                                                                                                 // metacharacters
+
+  std::regex valid_topic_regex( "^/([^/]+)/" + escaped_topic + "$" );
+  // replace traffic_participant with variable
   std::regex valid_type_regex( R"(^adore_ros2_msgs/msg/TrafficParticipant$)" );
 
   for( const auto& topic : topic_names_and_types )
@@ -189,12 +197,6 @@ DecisionMakerInfrastructure::update_dynamic_subscriptions()
                         [&]( const std::string& type ) { return std::regex_match( type, valid_type_regex ); } ) )
     {
       std::string vehicle_namespace = match[1].str();
-
-      // Skip subscribing to own namespace
-      if( vehicle_namespace == std::string( get_namespace() ).substr( 1 ) )
-      {
-        continue;
-      }
 
       // Check if already subscribed
       if( traffic_participant_subscribers.count( vehicle_namespace ) > 0 )
