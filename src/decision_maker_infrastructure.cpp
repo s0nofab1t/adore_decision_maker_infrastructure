@@ -168,7 +168,8 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
 }
 
 void
-DecisionMakerInfrastructure::traffic_participant_callback( const dynamics::TrafficParticipant& msg, const std::string& vehicle_namespace )
+DecisionMakerInfrastructure::traffic_participant_callback( const dynamics::TrafficParticipant& msg,
+                                                           const std::string& /*currently_unused*/ )
 {
   latest_traffic_participant_set.update_traffic_participants( msg );
 }
