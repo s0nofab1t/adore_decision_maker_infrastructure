@@ -54,7 +54,8 @@ DecisionMakerInfrastructure::run()
   // RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
 
   publish_local_map();
-  publish_infrastructure_position();
+  publish_infrastructure_position(); 
+  publish_infrastructure_info();
 
   latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
 
@@ -93,7 +94,10 @@ DecisionMakerInfrastructure::all_vehicles_follow_routes()
   double time_used_to_calculate_trajectory = now().seconds() - time_start;
   overview += "time used to calculate trajectories: " + std::to_string(time_used_to_calculate_trajectory) + ", ";
 
-  publisher_planned_traffic->publish( dynamics::conversions::to_ros_msg( latest_traffic_participant_set ) );
+  auto traffic_participant_set_msg = dynamics::conversions::to_ros_msg( latest_traffic_participant_set );
+  traffic_participant_set_msg.header.frame_id = "world";
+
+  publisher_planned_traffic->publish( traffic_participant_set_msg );
 }
 
 void
@@ -109,6 +113,7 @@ DecisionMakerInfrastructure::create_subscribers()
 void
 DecisionMakerInfrastructure::create_publishers()
 {
+  publisher_infrastructure_info = create_publisher<adore_ros2_msgs::msg::InfrastructureInfo>( "infrastructure_info", 10 );
   publisher_planned_traffic = create_publisher<adore_ros2_msgs::msg::TrafficParticipantSet>( "traffic_participants_with_trajectories", 1 );
   publisher_local_map       = create_publisher<adore_ros2_msgs::msg::Map>( "local_map", 1 );
   publisher_infrastructure_position = create_publisher<adore_ros2_msgs::msg::VisualizableObject>( "infrastructure_position", 1 );
@@ -306,6 +311,31 @@ DecisionMakerInfrastructure::publish_infrastructure_position()
   obj.header.frame_id = "world";
 
   publisher_infrastructure_position->publish( obj );
+}
+
+void
+DecisionMakerInfrastructure::publish_infrastructure_info()
+{
+  
+  adore_ros2_msgs::msg::InfrastructureInfo infrastructure_info_msg;
+  infrastructure_info_msg.position_x = infrastructure_pose.x;
+  infrastructure_info_msg.position_y = infrastructure_pose.y;
+  infrastructure_info_msg.yaw = infrastructure_pose.yaw;
+
+  adore_ros2_msgs::msg::Polygon2d validity_area_msg;
+  if ( latest_traffic_participant_set.validity_area.has_value() )
+  {
+    for (auto point : latest_traffic_participant_set.validity_area.value().points)
+    {
+        adore_ros2_msgs::msg::Point2d point_msg;
+        point_msg.x = point.x;
+        point_msg.y = point.y;
+
+        validity_area_msg.points.push_back(point_msg);
+    }
+    infrastructure_info_msg.validity_area = validity_area_msg;
+  }
+  publisher_infrastructure_info->publish(infrastructure_info_msg);
 }
 
 void

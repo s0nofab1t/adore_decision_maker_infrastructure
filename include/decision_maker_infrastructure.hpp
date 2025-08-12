@@ -31,6 +31,7 @@
 #include "adore_ros2_msgs/msg/traffic_participant_set.hpp"
 #include "adore_ros2_msgs/msg/traffic_signals.hpp"
 #include "adore_ros2_msgs/msg/visualizable_object.hpp"
+#include "adore_ros2_msgs/msg/infrastructure_info.hpp"
 
 #include "planning/multi_agent_PID.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -47,6 +48,7 @@ private:
 
   /******************************* PUBLISHERS RELATED MEMBERS ************************************************************/
   rclcpp::TimerBase::SharedPtr                                              main_timer;
+  rclcpp::Publisher<adore_ros2_msgs::msg::InfrastructureInfo>::SharedPtr publisher_infrastructure_info;
   rclcpp::Publisher<adore_ros2_msgs::msg::TrafficParticipantSet>::SharedPtr publisher_planned_traffic;
   rclcpp::Publisher<adore_ros2_msgs::msg::Map>::SharedPtr                   publisher_local_map;
   rclcpp::Publisher<adore_ros2_msgs::msg::VisualizableObject>::SharedPtr    publisher_infrastructure_position;
@@ -92,6 +94,7 @@ public:
   /******************************* PUBLISHER RELATED FUNCTIONS ************************************************************/
   void publish_local_map();
   void publish_infrastructure_position();
+  void publish_infrastructure_info();
 
   /******************************* SUBSCRIBER RELATED FUNCTIONS************************************************************/
   void traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg );
