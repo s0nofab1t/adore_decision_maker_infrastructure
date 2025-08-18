@@ -357,7 +357,7 @@ DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msg
   // auto validity_area = latest_traffic_participant_set.validity_area;
   // latest_traffic_participant_set = dynamics::conversions::to_cpp_type( msg );// @TODO, this is temporary, add back the uncommented area below
   // latest_traffic_participant_set.validity_area = validity_area;
-  std::cerr << "participant received - decision maker infra " << std::endl;
+  // std::cerr << "participant received - decision maker infra " << std::endl;
   auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
   for ( auto& [id, participant] : participants_cpp.participants )
   {
