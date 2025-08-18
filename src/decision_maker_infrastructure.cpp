@@ -68,7 +68,7 @@ void
 DecisionMakerInfrastructure::all_vehicles_follow_routes()
 {
   double time_start = now().seconds();
-  // auto mrm_participant_set = latest_traffic_participant_set;
+  auto mrm_participant_set = latest_traffic_participant_set;
   for( auto& [id, participant] : latest_traffic_participant_set.participants )
   {
     if ( participant.route.has_value() )
@@ -88,8 +88,12 @@ DecisionMakerInfrastructure::all_vehicles_follow_routes()
     }
   }
   multi_agent_PID_planner.plan_trajectories( latest_traffic_participant_set );
-  // multi_agent_PID_planner_MRM.plan_trajectories( mrm_participant_set );
-  // TODO add the MRM trajectories to the traffic participants
+  multi_agent_PID_planner_MRM.plan_trajectories( mrm_participant_set );
+  for( auto& [id, participant] : latest_traffic_participant_set.participants )
+  {
+    if( mrm_participant_set.participants.at( id ).trajectory.has_value() )
+      participant.mrm_trajectory = mrm_participant_set.participants.at( id ).trajectory.value();
+  }
 
   double time_used_to_calculate_trajectory = now().seconds() - time_start;
   overview += "time used to calculate trajectories: " + std::to_string(time_used_to_calculate_trajectory) + ", ";
@@ -186,8 +190,7 @@ DecisionMakerInfrastructure::load_parameters()
   }
 
   multi_agent_PID_planner.set_parameters( multi_agent_PID_settings );
-  // multi_agent_PID_planner_MRM           = multi_agent_PID_planner;
-  // mutli_agent_PID_planner_MRM.max_speed = 0.0;
+  multi_agent_PID_planner_MRM.max_allowed_speed = 0.0;
 }
 
 void
