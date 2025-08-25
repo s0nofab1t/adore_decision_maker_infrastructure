@@ -110,7 +110,7 @@ DecisionMakerInfrastructure::create_subscribers()
   subscriber_traffic_participant_set = create_subscription<adore_ros2_msgs::msg::TrafficParticipantSet>(
     "traffic_participants", 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
   subscriber_traffic_signals = create_subscription<adore_ros2_msgs::msg::TrafficSignals>(
-    "/global/traffic_signals", 1, std::bind( &DecisionMakerInfrastructure::traffic_signals_callback, this, std::placeholders::_1 ) );
+    "traffic_signals", 1, std::bind( &DecisionMakerInfrastructure::traffic_signals_callback, this, std::placeholders::_1 ) );
   main_timer = create_wall_timer( 100ms, std::bind( &DecisionMakerInfrastructure::run, this ) );
 }
 
