@@ -108,7 +108,7 @@ void
 DecisionMakerInfrastructure::create_subscribers()
 {
   subscriber_traffic_participant_set = create_subscription<adore_ros2_msgs::msg::TrafficParticipantSet>(
-    "traffic_participants", 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
+    traffic_participants_topic, 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
   subscriber_traffic_signals = create_subscription<adore_ros2_msgs::msg::TrafficSignals>(
     "traffic_signals", 1, std::bind( &DecisionMakerInfrastructure::traffic_signals_callback, this, std::placeholders::_1 ) );
   main_timer = create_wall_timer( 100ms, std::bind( &DecisionMakerInfrastructure::run, this ) );
@@ -132,6 +132,9 @@ DecisionMakerInfrastructure::load_parameters()
 
   declare_parameter( "dt", 0.1 );
   get_parameter( "dt", dt );
+
+  declare_parameter( "traffic_participants_topic", "infrastructure/traffic_participants" );
+  get_parameter( "traffic_participants_topic", traffic_participants_topic );
 
   declare_parameter( "max_acceleration", 2.0 );
   declare_parameter( "min_acceleration", -2.0 );
