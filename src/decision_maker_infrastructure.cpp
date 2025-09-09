@@ -133,7 +133,7 @@ DecisionMakerInfrastructure::load_parameters()
   declare_parameter( "dt", 0.1 );
   get_parameter( "dt", dt );
 
-  declare_parameter( "traffic_participants_topic", "infrastructure/traffic_participants" );
+  declare_parameter( "traffic_participants_topic", "/infrastructure/traffic_participants" );
   get_parameter( "traffic_participants_topic", traffic_participants_topic );
 
   declare_parameter( "max_acceleration", 2.0 );
@@ -193,6 +193,7 @@ DecisionMakerInfrastructure::load_parameters()
   }
 
   multi_agent_PID_planner.set_parameters( multi_agent_PID_settings );
+  multi_agent_PID_planner.max_allowed_speed = 13.6;
   multi_agent_PID_planner_MRM.max_allowed_speed = 0.0;
 }
 
