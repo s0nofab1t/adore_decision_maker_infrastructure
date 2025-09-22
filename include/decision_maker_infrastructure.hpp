@@ -64,9 +64,11 @@ private:
 
 public:
 
-  double              dt             = 0.1;
-  double              local_map_size = 200;
+  double              dt                  = 0.1;
+  double              local_map_size      = 200;
+  double              max_participant_age = 0.5;
   adore::math::Pose2d infrastructure_pose;
+  bool                debug = false;
 
   void run();
   void update_state();

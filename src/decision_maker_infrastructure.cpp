@@ -17,6 +17,8 @@
 #include <adore_dynamics_conversions.hpp>
 #include <adore_math/point.h>
 
+#include <planning/planning_helpers.hpp>
+
 namespace adore
 {
 
@@ -37,9 +39,12 @@ DecisionMakerInfrastructure::run()
   auto   end_time        = std::chrono::high_resolution_clock::now(); // End timer
   double elapsed_time_ms = std::chrono::duration<double, std::milli>( end_time - start_time ).count();
 
-  RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
+  if( debug )
+  {
+    RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
+    print_debug_info();
+  }
 
-  print_debug_info();
   publish_infrastructure_position();
 }
 
@@ -49,14 +54,146 @@ DecisionMakerInfrastructure::plan_traffic()
   if( !road_map )
     return;
 
-  planner::MultiAgentPlanner planner;
-  latest_traffic_participant_set = planner.plan_all_participants( latest_traffic_participant_set, road_map );
-  auto participants_no_routes    = latest_traffic_participant_set;
-  for( auto& [id, participant] : participants_no_routes.participants )
+  latest_traffic_participant_set.remove_old_participants( max_participant_age, now().seconds() );
+
+  if( latest_traffic_participant_set.participants.empty() )
+    return;
+
+  constexpr double kMaxRouteLen = 500.0;
+  constexpr double kReplanGap   = 10.0;
+
+  auto make_valid_route = [&]( const dynamics::VehicleStateDynamic& start_state,
+                               const std::optional<math::Point2d>&  goal ) -> std::optional<map::Route> {
+    if( goal )
+    {
+      map::Route r_goal( start_state, *goal, road_map );
+      if( !r_goal.center_lane.empty() )
+        return r_goal;
+    }
+    map::Route r_def = map::get_default_route( start_state, kMaxRouteLen, road_map );
+    if( !r_def.center_lane.empty() )
+      return r_def;
+    return std::nullopt;
+  };
+
+  auto needs_replan = [&]( const std::optional<map::Route>& route, const dynamics::VehicleStateDynamic& start_state ) {
+    if( !route )
+      return true;
+    const double s = route->get_s( start_state );
+    return route->center_lane.empty() || ( route->get_length() > 0.0 && s >= route->get_length() - kReplanGap );
+  };
+
+  // ---------- Route calculation timing ----------
+  const auto t_route_begin = std::chrono::steady_clock::now();
+
+  std::size_t n_considered = 0;
+  std::size_t n_replanned  = 0;
+  std::size_t n_goal_used  = 0;
+  std::size_t n_def_used   = 0;
+
+  for( auto& [id, p] : latest_traffic_participant_set.participants )
   {
-    participant.route.reset();
+    if( p.classification == dynamics::PEDESTRIAN )
+      continue;
+    ++n_considered;
+
+    if( needs_replan( p.route, p.state ) )
+    {
+      const bool had_goal = static_cast<bool>( p.goal_point );
+      auto       before   = p.route.has_value();
+
+      auto r = make_valid_route( p.state, p.goal_point );
+      if( r )
+      {
+        // count whether we used a goal-route or default-route
+        if( had_goal )
+        {
+          ++n_goal_used;
+        }
+        else
+        {
+          ++n_def_used;
+        }
+        p.route = std::move( *r );
+      }
+      else
+      {
+        p.route.reset();
+      }
+
+      ++n_replanned;
+      RCLCPP_DEBUG( get_logger(), "Replanned route for participant %ld (had=%d, goal=%d).", static_cast<long>( id ), before ? 1 : 0,
+                    had_goal ? 1 : 0 );
+    }
   }
-  publisher_planned_traffic->publish( participants_no_routes );
+
+  const auto   t_route_end = std::chrono::steady_clock::now();
+  const double route_ms    = std::chrono::duration<double, std::milli>( t_route_end - t_route_begin ).count();
+
+  // RCLCPP_INFO( get_logger(), "Route calc: %.1f ms | considered=%zu replanned=%zu goal_used~=%zu default_used~=%zu participants=%zu",
+  //              route_ms, n_considered, n_replanned, n_goal_used, n_def_used, latest_traffic_participant_set.participants.size() );
+
+  // ---------- Planning timing ----------
+  const auto t_plan_begin = std::chrono::steady_clock::now();
+
+  // planner::MultiAgentPID pid_planner;
+
+  // pid_planner.plan_trajectories( latest_traffic_participant_set );
+
+  for( auto& [id, participant] : latest_traffic_participant_set.participants )
+  {
+    if( !participant.route )
+    {
+      RCLCPP_WARN( get_logger(), "Participant %d has no route, skipping trajectory planning.", participant.id );
+      continue;
+    }
+    double participant_s = participant.route->get_s( participant.state );
+
+    std::vector<map::MapPoint> points;
+    for( const auto& [s, point] : participant.route->center_lane )
+    {
+      if( s > participant_s + 0.5 ) // start a bit ahead of the vehicle
+      {
+        points.push_back( point );
+      }
+    }
+    auto motion_model = [params = participant.physical_parameters]( const dynamics::VehicleStateDynamic& state,
+                                                                    const dynamics::VehicleCommand& cmd ) -> dynamics::VehicleStateDynamic {
+      return dynamics::kinematic_bicycle_model( state, params, cmd );
+    };
+    auto model         = dynamics::PhysicalVehicleModel();
+    model.params       = participant.physical_parameters;
+    model.motion_model = motion_model;
+
+    auto participants_copy = latest_traffic_participant_set;
+    participants_copy.participants.erase( id ); // remove self from obstacles
+
+    participant.trajectory = planner::waypoints_to_trajectory( participant.state, points, participants_copy, model, 6.0, dt );
+  }
+
+  planner::MultiAgentPlanner planner;
+
+  planner.set_parameters( {
+    {                       "dt",  dt },
+    {            "horizon_steps",  60 },
+    {                "max_speed", 6.0 },
+    { "max_lateral_acceleration", 2.0 }
+  } );
+
+  auto planned = planner.plan_all_participants( latest_traffic_participant_set, road_map );
+
+  const auto   t_plan_end = std::chrono::steady_clock::now();
+  const double plan_ms    = std::chrono::duration<double, std::milli>( t_plan_end - t_plan_begin ).count();
+
+  // RCLCPP_INFO( get_logger(), "Planning: %.1f ms for %zu participants", plan_ms, planned.participants.size() );
+
+  // ---------- Submap attach ----------
+  auto sub = road_map->get_submap( infrastructure_pose, 200, 200 );
+  for( auto& [id, p] : planned.participants )
+    if( p.route )
+      p.route->map = std::make_shared<map::Map>( sub );
+
+  publisher_planned_traffic->publish( planned );
 }
 
 void
@@ -88,6 +225,10 @@ DecisionMakerInfrastructure::load_parameters()
   infrastructure_pose.x   = declare_parameter<double>( "infrastructure_position_x", 0.0 );
   infrastructure_pose.y   = declare_parameter<double>( "infrastructure_position_y", 0.0 );
   infrastructure_pose.yaw = declare_parameter<double>( "infrastructure_yaw", 0.0 );
+
+  max_participant_age = declare_parameter<double>( "max_participant_age", 0.5 );
+
+  debug = declare_parameter<bool>( "debug", false );
 
   // Validity area polygon
   std::vector<double> validity_area_points;
@@ -217,7 +358,6 @@ DecisionMakerInfrastructure::update_dynamic_subscriptions()
     }
   }
 }
-
 }; // namespace adore
 
 #include "rclcpp_components/register_node_macro.hpp"
