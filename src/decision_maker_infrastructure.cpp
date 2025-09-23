@@ -41,7 +41,6 @@ DecisionMakerInfrastructure::run()
 
   if( debug )
   {
-    RCLCPP_INFO( this->get_logger(), "Planning took %.3f ms", elapsed_time_ms );
     print_debug_info();
   }
 
@@ -70,9 +69,13 @@ DecisionMakerInfrastructure::plan_traffic()
       if( !r_goal.center_lane.empty() )
         return r_goal;
     }
-    map::Route r_def = map::get_default_route( start_state, kMaxRouteLen, road_map );
-    if( !r_def.center_lane.empty() )
-      return r_def;
+    else
+    {
+      map::Route r_def = map::get_default_route( start_state, kMaxRouteLen, road_map );
+      if( !r_def.center_lane.empty() )
+        return r_def;
+    }
+
     return std::nullopt;
   };
 
@@ -168,16 +171,16 @@ DecisionMakerInfrastructure::plan_traffic()
     auto participants_copy = latest_traffic_participant_set;
     participants_copy.participants.erase( id ); // remove self from obstacles
 
-    participant.trajectory = planner::waypoints_to_trajectory( participant.state, points, participants_copy, model, 6.0, dt );
+    participant.trajectory = planner::waypoints_to_trajectory( participant.state, points, participants_copy, model, 10.0, dt );
   }
 
   planner::MultiAgentPlanner planner;
 
   planner.set_parameters( {
-    {                       "dt",  dt },
-    {            "horizon_steps",  60 },
-    {                "max_speed", 6.0 },
-    { "max_lateral_acceleration", 2.0 }
+    {                       "dt",   dt },
+    {            "horizon_steps",   30 },
+    {                "max_speed", 10.0 },
+    { "max_lateral_acceleration",  2.0 }
   } );
 
   auto planned = planner.plan_all_participants( latest_traffic_participant_set, road_map );
@@ -194,6 +197,7 @@ DecisionMakerInfrastructure::plan_traffic()
       p.route->map = std::make_shared<map::Map>( sub );
 
   publisher_planned_traffic->publish( planned );
+  // publisher_planned_traffic->publish( latest_traffic_participant_set );
 }
 
 void
