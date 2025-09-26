@@ -56,7 +56,7 @@ DecisionMakerInfrastructure::run()
   publish_infrastructure_position(); 
   publish_infrastructure_info();
 
-  latest_traffic_participant_set.remove_old_participants(1.0, now().seconds());
+  latest_traffic_participant_set.remove_old_participants(1.5, now().seconds());
 
   std_msgs::msg::String overview_msg;
   overview_msg.data = overview;
@@ -95,7 +95,7 @@ DecisionMakerInfrastructure::all_vehicles_follow_routes()
   }
 
   double time_used_to_calculate_trajectory = now().seconds() - time_start;
-  overview += "time used to calculate trajectories: " + std::to_string(time_used_to_calculate_trajectory) + ", ";
+  overview += "trajectories time: " + std::to_string(time_used_to_calculate_trajectory) + ", ";
 
   auto traffic_participant_set_msg = dynamics::conversions::to_ros_msg( latest_traffic_participant_set );
   traffic_participant_set_msg.header.frame_id = "world";
@@ -107,7 +107,7 @@ void
 DecisionMakerInfrastructure::create_subscribers()
 {
   subscriber_traffic_participant_set = create_subscription<adore_ros2_msgs::msg::TrafficParticipantSet>(
-    traffic_participants_topic, 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
+    "traffic_participants", 1, std::bind( &DecisionMakerInfrastructure::traffic_participants_callback, this, std::placeholders::_1 ) );
   subscriber_traffic_signals = create_subscription<adore_ros2_msgs::msg::TrafficSignals>(
     "traffic_signals", 1, std::bind( &DecisionMakerInfrastructure::traffic_signals_callback, this, std::placeholders::_1 ) );
   main_timer = create_wall_timer( 100ms, std::bind( &DecisionMakerInfrastructure::run, this ) );
@@ -131,9 +131,6 @@ DecisionMakerInfrastructure::load_parameters()
 
   declare_parameter( "dt", 0.1 );
   get_parameter( "dt", dt );
-
-  declare_parameter( "traffic_participants_topic", "/infrastructure/traffic_participants" );
-  get_parameter( "traffic_participants_topic", traffic_participants_topic );
 
   declare_parameter( "max_acceleration", 2.0 );
   declare_parameter( "min_acceleration", -2.0 );
@@ -252,9 +249,29 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
       }
     }
 
-    if( has_goal && !has_route )
+    if( !has_goal )
+    {
+      if ( participant.route.has_value() )
+      {
+        
+        double current_s     = participant.route->get_s( participant.state );
+        auto   pose_at_s     = participant.route->get_pose_at_s( current_s );
+        double dist_to_route = math::distance_2d( participant.state, pose_at_s );
+        if( dist_to_route > 1.5 )
+        {
+          participant.route = std::nullopt;
+        }
+      }
+
+      if ( !participant.route )
+        participant.route = map::get_default_route( participant.state, 100.0, std::make_shared<map::Map>(*local_map) );
+    }
+
+    if( has_goal && (!has_route || (has_route && participant.route->get_s(participant.state) + 35.0 > participant.route->get_length()))  )
+    // if (has_goal) 
     {
       participant.route = map::Route( participant.state, participant.goal_point.value(), road_map );
+
       if( participant.route->center_lane.empty() )
       {
         participant.route = std::nullopt;
@@ -264,10 +281,15 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
     }
 
     // This is only uses for debugging
-    if( has_goal )
+    // if( has_goal )
+    if( participant.v2x_id.has_value() )
     {
       // This is all used for overview purposes, move it somewhere else
       controlable_participants++;
+
+      double age = now().seconds() - participant.state.time;
+      text_to_add_later += "CAM age: id: " + std::to_string(participant.v2x_id.value()) + " : time : " + std::to_string(age) + ", ";
+      
 
 
       if (traffic_participant_set.validity_area.has_value()) // @TODO, this filter needs to be done elsewhere.
@@ -288,12 +310,22 @@ DecisionMakerInfrastructure::compute_routes_for_traffic_participant_set( dynamic
   }
 
   overview += "observing " + std::to_string(traffic_participant_set.participants.size()) + " participants, ";
-  overview += "trajectory planning for " + std::to_string(controlable_participants) + " participants, ";
-  overview += "with " + std::to_string(controlable_participants_inside_validity_area) + " inside the validty area, ";
+
+
+  // This loop is for debug only
+  // int participants_everywhere_with_cam = 0;
+  // for ( const auto& participant : traffic_participant_set.participants )
+  // {
+  //   if ( participant.second.v2x_id.has_value())
+  //     participants_everywhere_with_cam++;
+    
+  // }
+  overview += "with " + std::to_string(number_of_cam_participants_in_latest) + " observed CAM participants, ";
+  overview += std::to_string(controlable_participants_inside_validity_area) + " in validty area, ";
   overview += text_to_add_later;
 
   double time_used_calculating_route = now().seconds() - time_start;
-  overview += "route calculation time: " + std::to_string(time_used_calculating_route) + ", ";
+  overview += "route time: " + std::to_string(time_used_calculating_route) + ", ";
 }
 
 void
@@ -365,6 +397,16 @@ DecisionMakerInfrastructure::traffic_participants_callback( const adore_ros2_msg
   // latest_traffic_participant_set.validity_area = validity_area;
   // std::cerr << "participant received - decision maker infra " << std::endl;
   auto participants_cpp = dynamics::conversions::to_cpp_type( msg );
+
+  int participants_everywhere_with_cam = 0;
+  for ( const auto& participant : participants_cpp.participants )
+  {
+    if ( participant.second.v2x_id.has_value())
+      participants_everywhere_with_cam++;
+  }
+  number_of_cam_participants_in_latest = participants_everywhere_with_cam;
+
+
   for ( auto& [id, participant] : participants_cpp.participants )
   {
     // if ( !road_map.has_value() && participant.route.has_value())

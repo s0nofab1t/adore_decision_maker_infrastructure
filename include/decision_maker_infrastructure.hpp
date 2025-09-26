@@ -68,7 +68,6 @@ public:
   bool                                  debug_mode_active = true;
   double                                dt                = 0.1;
   double                                local_map_size    = 200;
-  std::string                           traffic_participants_topic;
   adore::math::Pose2d                   infrastructure_pose;
   adore::dynamics::VehicleCommandLimits command_limits = { 0.7, -2.0, 2.0 };
   std::map<std::string, double>         multi_agent_PID_settings;
@@ -99,6 +98,8 @@ public:
   /******************************* SUBSCRIBER RELATED FUNCTIONS************************************************************/
   void traffic_participants_callback( const adore_ros2_msgs::msg::TrafficParticipantSet& msg );
   void traffic_signals_callback( const adore_ros2_msgs::msg::TrafficSignals& msg );
+
+  int number_of_cam_participants_in_latest = 0; // debug value
 
   explicit DecisionMakerInfrastructure(const rclcpp::NodeOptions & options);
 };
