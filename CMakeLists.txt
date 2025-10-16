@@ -30,7 +30,6 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(adore_dynamics_conversions REQUIRED)
-find_package(OpenDrive REQUIRED)
 
 
 # Add any additional adore_* or ROS 2 dependencies here
@@ -58,7 +57,6 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_ros
   tf2_geometry_msgs
   adore_dynamics_conversions
-  OpenDrive
   adore_planning
 )
 
@@ -88,7 +86,6 @@ ament_target_dependencies(${PROJECT_NAME}_component
   tf2_ros
   tf2_geometry_msgs
   adore_dynamics_conversions
-  OpenDrive
   adore_planning
 )
 
