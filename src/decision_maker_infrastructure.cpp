@@ -58,8 +58,6 @@ DecisionMakerInfrastructure::plan_traffic()
   if( latest_traffic_participant_set.participants.empty() )
     return;
 
-  constexpr double kMaxRouteLen = 500.0;
-  constexpr double kReplanGap   = 10.0;
 
   auto make_valid_route = [&]( const dynamics::VehicleStateDynamic& start_state,
                                const std::optional<math::Point2d>&  goal ) -> std::optional<map::Route> {
@@ -71,7 +69,7 @@ DecisionMakerInfrastructure::plan_traffic()
     }
     else
     {
-      map::Route r_def = map::get_default_route( start_state, kMaxRouteLen, road_map );
+      map::Route r_def = map::get_default_route( start_state, max_route_length, road_map );
       if( !r_def.center_lane.empty() )
         return r_def;
     }
@@ -83,7 +81,7 @@ DecisionMakerInfrastructure::plan_traffic()
     if( !route )
       return true;
     const double s = route->get_s( start_state );
-    return route->center_lane.empty() || ( route->get_length() > 0.0 && s >= route->get_length() - kReplanGap );
+    return route->center_lane.empty() || ( route->get_length() > 0.0 && s >= route->get_length() - route_replan_dist );
   };
 
   // ---------- Route calculation timing ----------

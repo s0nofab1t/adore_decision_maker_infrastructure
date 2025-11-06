@@ -68,7 +68,9 @@ public:
   double              local_map_size      = 200;
   double              max_participant_age = 0.5;
   adore::math::Pose2d infrastructure_pose;
-  bool                debug = false;
+  bool                debug             = false;
+  constexpr double    max_route_length  = 500.0;
+  constexpr double    route_replan_dist = 10.0;
 
   void run();
   void update_state();
