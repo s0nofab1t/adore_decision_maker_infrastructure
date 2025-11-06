@@ -1,15 +1,14 @@
 /********************************************************************************
- * Copyright (C) 2017-2020 German Aerospace Center (DLR).
- * Eclipse ADORe, Automated Driving Open Research https://eclipse.org/adore
+ * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License 2.0 which is available at
- * http://www.eclipse.org/legal/epl-2.0.
+ * https://www.eclipse.org/legal/epl-2.0
  *
  * SPDX-License-Identifier: EPL-2.0
- *
- * Contributors:
- *    Marko Mizdrak
  ********************************************************************************/
 
 #include <chrono>
@@ -31,7 +30,9 @@
 #include "adore_ros2_msgs/msg/map.hpp"
 #include "adore_ros2_msgs/msg/route.hpp"
 #include "adore_ros2_msgs/msg/traffic_participant_set.hpp"
+#include "adore_ros2_msgs/msg/traffic_signals.hpp"
 #include "adore_ros2_msgs/msg/visualizable_object.hpp"
+#include "adore_ros2_msgs/msg/infrastructure_info.hpp"
 
 #include "planning/multi_agent_PID.hpp"
 #include "planning/multi_agent_planner.hpp"
@@ -58,6 +59,7 @@ private:
 
   std::shared_ptr<map::Map>              road_map = nullptr;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
+  std::string overview;
 
   std::string traffic_participant_in_topic = "traffic_participant";
   std::string planned_traffic_out_topic    = "planned_traffic";
@@ -85,6 +87,7 @@ public:
 
   /******************************* PUBLISHER RELATED FUNCTIONS ************************************************************/
   void publish_infrastructure_position();
+  void publish_infrastructure_info();
 
   /******************************* SUBSCRIBER RELATED FUNCTIONS************************************************************/
   void traffic_participant_callback( const dynamics::TrafficParticipant& msg, const std::string& vehicle_namespace );
