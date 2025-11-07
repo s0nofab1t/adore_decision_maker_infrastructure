@@ -16,8 +16,8 @@
 #include <adore_dynamics_conversions.hpp>
 #include <adore_math/point.h>
 #include <adore_math/polygon.h>
-#include "std_msgs/msg/string.hpp"
 
+#include "std_msgs/msg/string.hpp"
 #include <planning/planning_helpers.hpp>
 
 namespace adore
@@ -261,7 +261,7 @@ DecisionMakerInfrastructure::print_init_info()
 }
 
 void
-DecisionMakerInfrastructure::debug_info(bool print)
+DecisionMakerInfrastructure::print_debug_info()
 {
   const double current_time_seconds = now().seconds();
 
@@ -352,8 +352,8 @@ DecisionMakerInfrastructure::update_dynamic_subscriptions()
       // Create a new subscription
       auto subscription = create_subscription<ParticipantAdapter>( topic_name, 10,
                                                                    [this, vehicle_namespace]( const dynamics::TrafficParticipant& msg ) {
-        traffic_participant_callback( msg, vehicle_namespace );
-      } );
+                                                                     traffic_participant_callback( msg, vehicle_namespace );
+                                                                   } );
 
       traffic_participant_subscribers[vehicle_namespace] = subscription;
 

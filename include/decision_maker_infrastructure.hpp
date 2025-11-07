@@ -32,7 +32,6 @@
 #include "adore_ros2_msgs/msg/traffic_participant_set.hpp"
 #include "adore_ros2_msgs/msg/traffic_signals.hpp"
 #include "adore_ros2_msgs/msg/visualizable_object.hpp"
-#include "adore_ros2_msgs/msg/infrastructure_info.hpp"
 
 #include "planning/multi_agent_PID.hpp"
 #include "planning/multi_agent_planner.hpp"
@@ -59,7 +58,7 @@ private:
 
   std::shared_ptr<map::Map>              road_map = nullptr;
   adore::dynamics::TrafficParticipantSet latest_traffic_participant_set;
-  std::string overview;
+  std::string                            overview;
 
   std::string traffic_participant_in_topic = "traffic_participant";
   std::string planned_traffic_out_topic    = "planned_traffic";
@@ -71,8 +70,8 @@ public:
   double              max_participant_age = 0.5;
   adore::math::Pose2d infrastructure_pose;
   bool                debug             = false;
-  constexpr double    max_route_length  = 500.0;
-  constexpr double    route_replan_dist = 10.0;
+  double              max_route_length  = 500.0;
+  double              route_replan_dist = 10.0;
 
   void run();
   void update_state();
