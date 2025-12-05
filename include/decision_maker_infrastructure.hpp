@@ -48,6 +48,14 @@ class DecisionMakerInfrastructure : public rclcpp::Node
 {
 private:
 
+  bool                      needs_replan( const std::optional<map::Route>& route, const dynamics::VehicleStateDynamic& start_state ) const;
+  std::optional<map::Route> make_valid_route( const dynamics::VehicleStateDynamic& start_state,
+                                              const std::optional<math::Point2d>&  goal ) const;
+
+  void                            update_routes_for_participants();
+  dynamics::TrafficParticipantSet plan_with_pid();
+  dynamics::TrafficParticipantSet plan_with_multi_agent_planner();
+
   rclcpp::TimerBase::SharedPtr                                           main_timer;
   rclcpp::Publisher<ParticipantSetAdapter>::SharedPtr                    publisher_planned_traffic;
   rclcpp::Publisher<adore_ros2_msgs::msg::VisualizableObject>::SharedPtr publisher_infrastructure_position;
@@ -63,14 +71,20 @@ private:
   std::string traffic_participant_in_topic = "traffic_participant";
   std::string planned_traffic_out_topic    = "planned_traffic";
 
+  enum class PlannerBackend
+  {
+    MultiAgentPid,
+    MultiAgentPlanner
+  } planner_backend;
+
 public:
 
   double              dt                  = 0.1;
-  double              local_map_size      = 200;
-  double              max_participant_age = 0.5;
+  double              local_map_size      = 50;
+  double              max_participant_age = 1.0;
   adore::math::Pose2d infrastructure_pose;
   bool                debug             = false;
-  double              max_route_length  = 500.0;
+  double              max_route_length  = 100.0;
   double              route_replan_dist = 10.0;
 
   void run();
